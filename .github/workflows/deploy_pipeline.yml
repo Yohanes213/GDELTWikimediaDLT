@@ -20,22 +20,13 @@ jobs:
     - name: Check Databricks CLI version
       run: databricks --version
 
-      
-    - name: Configure Databricks CLI
-      run: |
-        echo "[DEFAULT]" > ~/.databrickscfg
-        echo "host = $DATABRICKS_HOST" >> ~/.databrickscfg
-        echo "client_id = $DATABRICKS_CLIENT_ID" >> ~/.databrickscfg
-        echo "client_secret = $DATABRICKS_CLIENT_SECRET" >> ~/.databrickscfg
-        echo "azure_tenant_id = $DATABRICKS_TENANT_ID" >> ~/.databrickscfg
+    - name: Deploy pipeline
       env:
         DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
         DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
         DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
-        DATABRICKS_TENANT_ID: ${{ secrets.DATABRICKS_TENANT_ID }}
-
-    - name: Deploy pipeline
+        DATABRICKS_AZURE_TENANT_ID: ${{ secrets.DATABRICKS_TENANT_ID }}
       run: |
-        databricks bundle validate --profile DEFAULT
-        databricks bundle deploy --profile DEFAULT
+        databricks bundle validate
+        databricks bundle deploy
       # Validates and deploys the pipeline using Databricks Asset Bundle
