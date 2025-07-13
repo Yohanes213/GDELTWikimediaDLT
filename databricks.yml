@@ -1,0 +1,26 @@
+bundle:
+  name: gdelt_dlt_pipeline
+
+resources:
+  pipelines:
+    gdelt_wiki_dlt:
+      name: GDELT_Wiki_DLT
+      storage: dbfs:/pipelines/gdelt_dlt
+      target: gdeltcatalog.gdeltdlt
+      development: false
+      continuous: false
+      libraries:
+        - notebook:
+            path: /Users/johnteshe13@gmail.com/Week4/GDELTWikimediaDLT/notebooks/dlt_pipeline
+      clusters:
+        - label: default
+          node_type_id: Standard_D4s_v3
+          autoscale:
+            min_workers: 1
+            max_workers: 3
+
+targets:
+  prod:
+    mode: production
+    workspace:
+      host: https://adb-4336080139557394.14.azuredatabricks.net/?o=4336080139557394
