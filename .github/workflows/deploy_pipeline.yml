@@ -16,23 +16,26 @@ jobs:
       run: |
         curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/v0.259.0/install.sh | sh
         echo "/usr/local/bin" >> $GITHUB_PATH
-      # Installs Databricks CLI v0.259.0
 
+    - name: Check Databricks CLI version
+      run: databricks --version
+
+      
     - name: Configure Databricks CLI
-      env:
-        DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
-        DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
-        DATABRICKS_TENANT_ID: ${{ secrets.DATABRICKS_TENANT_ID }}
-        DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
       run: |
-        echo "[adb-4336080139557394]" > ~/.databrickscfg
+        echo "[DEFAULT]" > ~/.databrickscfg
         echo "host = $DATABRICKS_HOST" >> ~/.databrickscfg
         echo "client_id = $DATABRICKS_CLIENT_ID" >> ~/.databrickscfg
         echo "client_secret = $DATABRICKS_CLIENT_SECRET" >> ~/.databrickscfg
-        echo "tenant_id = $DATABRICKS_TENANT_ID" >> ~/.databrickscfg
-        databricks auth login --host $DATABRICKS_HOST --client-id $DATABRICKS_CLIENT_ID --client-secret $DATABRICKS_CLIENT_SECRET --tenant-id $DATABRICKS_TENANT_ID --profile adb-4336080139557394
+        echo "azure_tenant_id = $DATABRICKS_TENANT_ID" >> ~/.databrickscfg
+      env:
+        DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+        DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+        DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+        DATABRICKS_TENANT_ID: ${{ secrets.DATABRICKS_TENANT_ID }}
 
     - name: Deploy pipeline
       run: |
-        databricks bundle validate --profile adb-4336080139557394
-        databricks bundle deploy --profile adb-4336080139557394
+        databricks bundle validate --profile DEFAULT
+        databricks bundle deploy --profile DEFAULT
+      # Validates and deploys the pipeline using Databricks Asset Bundle
