@@ -1,9 +1,8 @@
-name: Deply DLT Pipeline
+name: Deploy DLT Pipeline
 
 on:
   push:
     branches: [ main ]
-
 
 jobs:
   deploy:
@@ -14,7 +13,10 @@ jobs:
       uses: actions/checkout@v4
     
     - name: Install Databricks CLI
-      run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/v0.259.0/install.sh | sudo sh
+      run: |
+        curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/v0.259.0/install.sh | sh
+        echo "/usr/local/bin" >> $GITHUB_PATH
+      # Installs Databricks CLI v0.259.0
 
     - name: Configure Databricks CLI
       env:
@@ -23,13 +25,14 @@ jobs:
         DATABRICKS_TENANT_ID: ${{ secrets.DATABRICKS_TENANT_ID }}
         DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
       run: |
-        databricks configure --aad-token
-    
+        echo "[adb-4336080139557394]" > ~/.databrickscfg
+        echo "host = $DATABRICKS_HOST" >> ~/.databrickscfg
+        echo "client_id = $DATABRICKS_CLIENT_ID" >> ~/.databrickscfg
+        echo "client_secret = $DATABRICKS_CLIENT_SECRET" >> ~/.databrickscfg
+        echo "tenant_id = $DATABRICKS_TENANT_ID" >> ~/.databrickscfg
+        databricks auth login --host $DATABRICKS_HOST --client-id $DATABRICKS_CLIENT_ID --client-secret $DATABRICKS_CLIENT_SECRET --tenant-id $DATABRICKS_TENANT_ID --profile adb-4336080139557394
+
     - name: Deploy pipeline
       run: |
-        # databricks pipelines create --json-file dlt_pipeline_config.json \
-        #   || databricks pipelines update --json-file dlt_pipeline_config.json
-
         databricks bundle validate --profile adb-4336080139557394
         databricks bundle deploy --profile adb-4336080139557394
-        
