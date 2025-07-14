@@ -23,4 +23,4 @@ targets:
   prod:
     mode: production
     workspace:
-      host: https://adb-4336080139557394.14.azuredatabricks.net/?o=4336080139557394
+      host: https://adb-4336080139557394.14.azuredatabricks.net
