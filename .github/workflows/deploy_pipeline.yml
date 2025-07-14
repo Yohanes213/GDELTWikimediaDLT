@@ -14,8 +14,9 @@ jobs:
     
     - name: Install Databricks CLI
       run: |
-        curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/v0.259.0/install.sh | sh
-        echo "/usr/local/bin" >> $GITHUB_PATH
+        # curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/v0.259.0/install.sh | sh
+        # echo "/usr/local/bin" >> $GITHUB_PATH
+        pip install databricks-cli
 
     - name: Check Databricks CLI version
       run: databricks --version
