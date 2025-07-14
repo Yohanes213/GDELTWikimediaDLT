@@ -26,7 +26,9 @@ jobs:
         DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
         DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
         DATABRICKS_AZURE_TENANT_ID: ${{ secrets.DATABRICKS_TENANT_ID }}
+        DATABRICKS_CONFIG_PROFILE: ${{ secrets.DATABRICKS_CONFIG_PROFILE }}
       run: |
-        databricks bundle validate
-        databricks bundle deploy
+        databricks bundle validate 
+        databricks bundle deploy -t prod
+        databricks bundle run -t prod gdelt_wiki_dlt
       # Validates and deploys the pipeline using Databricks Asset Bundle
