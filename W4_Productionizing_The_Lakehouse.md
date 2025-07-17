@@ -463,3 +463,10 @@ Using Genie made it much easier and faster to explore my lakehouse data, validat
 
 
 
+## Databricks Application Prototype
+
+For the bonus task, I attempted to design and implement a simple Databricks App (using Streamlit) that would allow users to select a date range and country, and then view timelines of major GDELT events and Wikipedia edit activity for that country.
+
+
+However, when I tried to run the app, I ran into an error saying that `JAVA_HOME` was not set. Because of this environment issue, I was unable to complete the implementation of the app.
+
