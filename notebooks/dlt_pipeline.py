@@ -3,15 +3,17 @@
 
 # COMMAND ----------
 
-# import dlt
-from pyspark.sql.functions import col, coalesce, lit, from_unixtime
+import dlt
+from pyspark.sql.functions import col, coalesce, lit, from_unixtime, udtf
 import os
 import sys
+from wikimedia_udtf import WikimediaUDTF
 
 project_root = os.path.abspath(os.path.join('..'))
 sys.path.append(project_root)
 
 from src.config import GDELT_PATH, WIKIMEDIA_PATH, storage_account_name, storage_account_key
+
 from src.schemas.gdelt_schema import gdelt_schema
 from src.schemas.wikimedia_schema import wiki_schema
 from src.dq_rules.gdelt_dq import GDLET_DQ_RULES
@@ -24,6 +26,14 @@ spark.conf.set(
     f"fs.azure.account.key.{storage_account_name}.blob.core.windows.net",
     storage_account_key
 )
+
+# COMMAND ----------
+
+# from wikimedia_udtf import WikimediaUDTF
+
+# # THIS MUST RUN before any dlt.table definitions:
+# spark.udtf.register("wikimedia_udtf", WikimediaUDTF)
+# print("✅ UDTF registered")
 
 # COMMAND ----------
 
@@ -148,13 +158,3 @@ def wikimedia_silver():
     return df
 
 # COMMAND ----------
-
-@dlt.table(
-    name="correlated_gold",
-    comment="Correlated Wikipedia edits with GDELT events within 1-hour window"
-)
-def correlated_gold():
-    gdelt = dlt.read_stream("gdelt_silver").withWatermark("event_timestamp", "1 hour")
-    wiki = dlt.read_stream("wikimedia_silver").withWatermark("event_timestamp", "1 hour")
-
-    
