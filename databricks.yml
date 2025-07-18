@@ -6,7 +6,7 @@
       gdelt_wiki_dlt:
         name: GDELT_Wiki_DLT2
         # storage:
-        catalog: gdeltcatalog1   # your Unity Catalog catalog
+        catalog: gdeltcatalog1
         schema:  gddlt  
         development: false
         continuous: false
