@@ -1,188 +1,123 @@
+# app.py
+import os
+from databricks import sql
+from databricks.sdk.core import Config
 import streamlit as st
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, to_date
 import pandas as pd
 import plotly.express as px
-import logging
-import sys
-import os
-import subprocess
-import glob
+from datetime import datetime
 
-# ---- Java Discovery ----
-# New candidate list based on your environment
-java_candidates = [
-    "/usr/lib/jvm/zulu11",
-    "/usr/lib/jvm/zulu11-ca-amd64",
-    "/usr/lib/jvm/zulu17",
-    "/usr/lib/jvm/zulu17-ca-amd64",
-    "/usr/lib/jvm/zulu8",
-    "/usr/lib/jvm/zulu8-ca-amd64"
-]
+# ——————————————————————————————————————————
+# Helpers
+# ——————————————————————————————————————————
 
-found_java = None
-java_bin_path = None
+# Place this somewhere in your app.py file, after the st.title line.
 
-for candidate in java_candidates:
-    # Check for java binary in standard location
-    candidate_bin = os.path.join(candidate, "bin", "java")
-    if os.path.isfile(candidate_bin):
-        found_java = candidate
-        java_bin_path = candidate_bin
-        break
-    
-    # Check for java binary in JRE location (zulu8 uses this)
-    jre_candidate_bin = os.path.join(candidate, "jre", "bin", "java")
-    if os.path.isfile(jre_candidate_bin):
-        found_java = candidate
-        java_bin_path = jre_candidate_bin
-        break
+# st.markdown("---")
+# st.subheader("Authentication Debugger")
 
-if found_java:
-    os.environ["JAVA_HOME"] = found_java
-    
-    # Add both possible bin locations to PATH
-    bin_paths = [
-        os.path.join(found_java, "bin"),
-        os.path.join(found_java, "jre", "bin")
-    ]
-    existing_path = os.environ.get("PATH", "")
-    new_path = ":".join([p for p in bin_paths if os.path.isdir(p)] + [existing_path])
-    os.environ["PATH"] = new_path
-    
-    st.write(f"### Found JAVA_HOME at: {found_java}")
-    st.write(f"### Updated PATH: {new_path}")
-    
-    # Verify Java using the found binary path
-    try:
-        java_version = subprocess.check_output(
-            [java_bin_path, "-version"],
-            stderr=subprocess.STDOUT,
-            text=True
-        )
-        st.write(f"Java Version:\n{java_version}")
-    except Exception as e:
-        st.error(f"Java verification failed: {str(e)}")
-        st.stop()
-else:
-    st.error("Java not found in common locations. Searched paths:")
-    st.write(java_candidates)
-    st.stop()
+#if st.button("Check My Identity"):
+#     try:
+#        # This SQL command asks Databricks "who am I?"
+#        identity_df = sqlQuery("SELECT current_user()")
+        
+        # Extract the identity from the DataFrame
+#        current_identity = identity_df.iloc[0, 0]
+        
+#        st.success(f"The application is authenticating as: **{current_identity}**")
+#        st.info("This is the user or service principal you need to grant permissions to.")
+        
+#    except Exception as e:
+#        st.error(f"Failed to check identity: {e}")
 
-# ---- Spark Initialization ----
-try:
-    spark = SparkSession.builder \
-        .appName("GlobalEventsApp") \
-        .config("spark.driver.extraJavaOptions", f"-Djava.home={found_java}") \
-        .config("spark.executor.extraJavaOptions", f"-Djava.home={found_java}") \
-        .getOrCreate()
-    
-    st.write(f"Spark version: {spark.version}")
-except Exception as e:
-    st.error(f"Spark initialization failed: {str(e)}")
-    st.stop()
+def sql_query(query: str) -> pd.DataFrame:
+    """Run a SQL query against the configured Databricks SQL warehouse."""
+    cfg = Config()  # reads DATABRICKS_HOST, DATABRICKS_TOKEN from env
+    with sql.connect(
+        server_hostname=cfg.host,
+        http_path=f"/sql/1.0/warehouses/{os.getenv('DATABRICKS_WAREHOUSE_ID')}",
+        credentials_provider=lambda: cfg.authenticate
+    ) as conn:
+        with conn.cursor() as cur:
+            cur.execute(query)
+            return cur.fetchall_arrow().to_pandas()
+
+@st.cache_data(ttl=60)
+def load_countries() -> list[str]:
+    df = sql_query("""
+        SELECT DISTINCT Action_Geo_Fullname AS country
+        FROM gdeltcatalog.gdeltdlt.gdelt_silver
+        ORDER BY country
+    """)
+    return df["country"].dropna().tolist()
+
+@st.cache_data(ttl=60)
+def load_gdelt_events(country: str, start: datetime, end: datetime) -> pd.DataFrame:
+    q = f"""
+      SELECT CAST(event_timestamp AS DATE) AS date, COUNT(*) AS event_count
+      FROM gdeltcatalog.gdeltdlt.gdelt_silver
+      WHERE Action_Geo_FullName = '{country}'
+        AND CAST(event_timestamp AS DATE) BETWEEN '{start:%Y-%m-%d}' AND '{end:%Y-%m-%d}'
+      GROUP BY date
+      ORDER BY date
+    """
+    return sql_query(q)
+
+@st.cache_data(ttl=60)
+def load_wikimedia_edits(country: str, start: datetime, end: datetime) -> pd.DataFrame:
+    q = f"""
+      SELECT CAST(event_timestamp AS DATE) AS date, COUNT(*) AS edit_count
+      FROM gdeltcatalog.gdeltdlt.wikimedia_silver
+      WHERE wiki = 'enwiki'
+        AND title LIKE '%{country}%'
+        AND CAST(event_timestamp AS DATE) BETWEEN '{start:%Y-%m-%d}' AND '{end:%Y-%m-%d}'
+      GROUP BY date
+      ORDER BY date
+    """
+    return sql_query(q)
 
 
-# Debug environment
-st.write("### Environment Debug")
-st.write(f"JAVA_HOME: {os.environ['JAVA_HOME']}")
-st.write(f"PATH: {os.environ['PATH']}")
+# ——————————————————————————————————————————
+# Streamlit UI
+# ——————————————————————————————————————————
 
-# Verify Java installation
-java_bin = f"{os.environ['JAVA_HOME']}/bin/java"
-if os.path.isfile(java_bin):
-    try:
-        java_version = subprocess.run(
-            [java_bin, "-version"],
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        st.write(f"Java Version:\n{java_version.stderr}")
-    except subprocess.CalledProcessError as e:
-        st.error(f"Java error: {str(e)}")
-else:
-    st.error(f"Java binary not found at {java_bin}")
+st.set_page_config(layout="wide")
+st.title("🌎 Global Events & Wikipedia Activity Explorer")
 
-# Initialize Spark session
-try:
-    
-    st.write(f"Spark version: {spark.version}")
-    # logger.info(f"Spark session initialized successfully. Spark version: {spark.version}")
-except Exception as e:
-    # logger.error(f"Failed to initialize Spark session: {str(e)}")
-    st.error(f"Failed to initialize Spark session: {str(e)}")
-    st.stop()
+with st.sidebar:
+    st.header("Filters")
+    today = datetime.today().date()
+    start_date = st.date_input("Start date", value=today.replace(day=1))
+    end_date   = st.date_input("End date",   value=today)
+    country_list = load_countries()
+    country = st.selectbox("Country", country_list or ["— no countries —"])
 
-# Streamlit app
-st.title("Global Events and Wikipedia Activity Explorer")
+# Fetch data
+gdelt_df = load_gdelt_events(country, start_date, end_date) if country_list else pd.DataFrame()
+wiki_df  = load_wikimedia_edits(country, start_date, end_date) if country_list else pd.DataFrame()
 
-# UI components
-st.sidebar.header("Filters")
-start_date = st.sidebar.date_input("Start Date")
-end_date = st.sidebar.date_input("End Date")
-
-# Fetch distinct countries with error handling
-try:
-    countries = (spark.table("gdelt_silver")
-                 .select("ActionGeo_Fullname")
-                 .distinct()
-                 .toPandas()["ActionGeo_Fullname"]
-                 .tolist())
-    # logger.info(f"Successfully fetched {len(countries)} distinct countries")
-except Exception as e:
-    # logger.error(f"Error fetching countries: {str(e)}")
-    st.error(f"Error fetching countries: {str(e)}")
-    countries = []
-country = st.sidebar.selectbox("Select Country", countries if countries else ["No countries available"])
-
-# Query GDELT Silver table
-try:
-    gdelt_df = (spark.table("gdelt_silver")
-                .filter((col("ActionGeo_Fullname") == country) & 
-                        (col("timestamp").cast("date").between(start_date, end_date)))
-                .groupBy(to_date(col("timestamp")).alias("date"))
-                .count()
-                .toPandas()
-                .rename(columns={"count": "event_count"}))
-    # logger.info(f"Successfully queried GDELT data: {len(gdelt_df)} rows")
-except Exception as e:
-    # logger.error(f"Error querying GDELT data: {str(e)}")
-    st.error(f"Error querying GDELT data: {str(e)}")
-    gdelt_df = pd.DataFrame()
-
-# Query Wikimedia Silver table
-try:
-    wikimedia_df = (spark.table("wikimedia_silver")
-                    .filter((col("wiki") == "enwiki") & 
-                            (col("page_title").like(f"%{country}%")) & 
-                            (col("timestamp").cast("date").between(start_date, end_date)))
-                    .groupBy(to_date(col("timestamp")).alias("date"))
-                    .count()
-                    .toPandas()
-                    .rename(columns={"count": "edit_count"}))
-    # logger.info(f"Successfully queried Wikimedia data: {len(wikimedia_df)} rows")
-except Exception as e:
-    # logger.error(f"Error querying Wikimedia data: {str(e)}")
-    st.error(f"Error querying Wikimedia data: {str(e)}")
-    wikimedia_df = pd.DataFrame()
-
-# Display metrics
+# Summary metrics
 st.subheader("Summary Metrics")
-st.write(f"Total GDELT Events: {gdelt_df['event_count'].sum() if not gdelt_df.empty else 0}")
-st.write(f"Total Wikipedia Edits: {wikimedia_df['edit_count'].sum() if not wikimedia_df.empty else 0}")
+c1, c2 = st.columns(2)
+c1.metric("Total GDELT Events", f"{int(gdelt_df['event_count'].sum()) if not gdelt_df.empty else 0}")
+c2.metric("Total Wikipedia Edits", f"{int(wiki_df ['edit_count'].sum()) if not wiki_df.empty  else 0}")
 
-# Plot timelines
-st.subheader("GDELT Events Timeline")
-if not gdelt_df.empty:
-    fig_gdelt = px.line(gdelt_df, x="date", y="event_count", title="GDELT Events")
-    st.plotly_chart(fig_gdelt)
-else:
-    st.write("No GDELT events found for the selected filters.")
+# Timelines
+st.subheader("Timelines")
+g1, g2 = st.columns(2)
 
-st.subheader("Wikipedia Edits Timeline")
-if not wikimedia_df.empty:
-    fig_wiki = px.line(wikimedia_df, x="date", y="edit_count", title="Wikipedia Edits")
-    st.plotly_chart(fig_wiki)
-else:
-    st.write("No Wikipedia edits found for the selected filters.")
+with g1:
+    st.markdown("**GDELT Events Over Time**")
+    if not gdelt_df.empty:
+        fig1 = px.line(gdelt_df, x="date", y="event_count", title="", labels={"event_count":"Events"})
+        st.plotly_chart(fig1, use_container_width=True)
+    else:
+        st.info("No GDELT events in this range.")
+
+with g2:
+    st.markdown("**Wikipedia Edits Over Time**")
+    if not wiki_df.empty:
+        fig2 = px.line(wiki_df, x="date", y="edit_count", title="", labels={"edit_count":"Edits"})
+        st.plotly_chart(fig2, use_container_width=True)
+    else:
+        st.info("No Wikipedia edits in this range.")
