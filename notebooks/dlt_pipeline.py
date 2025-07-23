@@ -4,16 +4,16 @@
 # COMMAND ----------
 
 import dlt
-from pyspark.sql.functions import col, coalesce, lit, from_unixtime, udtf
+from pyspark.sql.functions import col, coalesce, lit, from_unixtime, udtf, to_date
 import os
 import sys
-from wikimedia_udtf import WikimediaUDTF
+
 
 project_root = os.path.abspath(os.path.join('..'))
 sys.path.append(project_root)
 
 from src.config import GDELT_PATH, WIKIMEDIA_PATH, storage_account_name, storage_account_key
-
+from src.wikimedia_udtf import WikimediaStreamUDTF
 from src.schemas.gdelt_schema import gdelt_schema
 from src.schemas.wikimedia_schema import wiki_schema
 from src.dq_rules.gdelt_dq import GDLET_DQ_RULES
@@ -84,26 +84,43 @@ def gdelt_silver_clean():
     for col_name in string_columns:
         df = df.withColumn(col_name, coalesce(col(col_name), lit("Unknown")))
 
-    df = df.withColumn("event_timestamp", from_unixtime(col("SQL_Date").cast("string"), "yyyyMMdd"))
-    
+    df = df.withColumn(
+        "event_timestamp",
+        to_date(col("SQL_Date").cast("string"), "yyyyMMdd")
+        )
     return df
 
 # COMMAND ----------
 
 # Wikimedia Bronze: Raw JSON payloads from Wikimedia recent-change stream
+# @dlt.table(
+#     name="wikimedia_bronze",
+#     comment="Raw JSON payloads from Wikimedia recent-change stream"
+# )
+# def wikimedia_bronze():
+#     return (
+#         spark.readStream
+#         .format("cloudFiles")
+#         .option("cloudFiles.format", "json")
+#         .option("cloudFiles.schemaLocation", "/mnt/wikimedia-raw/_schema")
+#         .schema(wiki_schema)
+#         .load(WIKIMEDIA_PATH)
+#     )
+
+
+# COMMAND ----------
+
 @dlt.table(
     name="wikimedia_bronze",
-    comment="Raw JSON payloads from Wikimedia recent-change stream"
+    comment="Raw Wikimedia recent changes data streamed directly from HTTP source."
 )
-def wikimedia_bronze():
-    return (
-        spark.readStream
-        .format("cloudFiles")
-        .option("cloudFiles.format", "json")
-        .option("cloudFiles.schemaLocation", "/mnt/wikimedia-raw/_schema")
-        .schema(wiki_schema)
-        .load(WIKIMEDIA_PATH)
-    )
+def wikimedia_raw_bronze():
+    """
+    Calls the DEBUG version of the UDTF to force an error or success.
+    """
+    return WikimediaStreamUDTF()
+
+
 
 # Wikimedia Silver: Cleaned and flattened Wikimedia events
 @dlt.table(
@@ -152,7 +169,10 @@ def wikimedia_silver():
     for c in string_columns:
         df = df.withColumn(c, coalesce(col(c), lit("Unknown")))
 
-    df = df.withColumn("event_timestamp", from_unixtime(col("timestamp")))
+    df = df.withColumn(
+        "event_timestamp",
+        to_date(col("SQL_Date").cast("string"), "yyyyMMdd")
+        )
 
 
     return df
