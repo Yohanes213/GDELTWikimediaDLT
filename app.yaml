@@ -1,8 +1,11 @@
-command: ['streamlit', 'run', 'app.py']
+command: [
+  "streamlit", 
+  "run",
+  "app.py"
+]
+
 env:
-  - name: 'DATABRICKS_WAREHOUSE_ID'
-    value: 'quoz2bvjy8bl7skl'
-  - name: 'STREAMLIT_GATHER_USAGE_STATS'
-    value: 'false'
-  # - name: 'JAVA_HOME'
-  #   value: '/databricks/jvm'
+  - name: "DATABRICKS_WAREHOUSE_ID"
+    valueFrom: "sql-warehouse"
+  - name: STREAMLIT_BROWSER_GATHER_USAGE_STATS
+    value: "false"
